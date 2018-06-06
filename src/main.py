@@ -196,7 +196,19 @@ def wLLAndwLU(wMat, img, labels):
 
 
 def wUL(wMat, img, labels):
-    return 0
+    sh = img.shape
+
+    for y in range(0, sh[0]):
+        for x in range(0, sh[1]):
+            wY = y * sh[1] + x
+
+            for item in labels:
+                wX = item.GetIndex()
+
+                if wY != wX:
+                    wMat[wY, wX] = 0.0
+
+    return wMat
 
 
 def computeQ(wMat, img, labels):
@@ -243,6 +255,7 @@ def fullWeight(img, phoParam, labParam):
     wMat = wLLAndwLU(wMat, img, labels)
     q = computeQ(wMat, img, labels)
     wMat = diagonal(wMat)
+    wMat = wUL(wMat, img, labels)
 
     b = lng.cg(wMat, q)
 
@@ -255,3 +268,29 @@ gauss_img = skimage.util.random_noise(img, mode='gaussian', seed=None, clip=True
 
 cv2.imwrite("..\\images\\original.jpg", img)
 plt.imsave('..\\images\\gaussian_noise.png', gauss_img, cmap=plt.cm.gray)
+
+#Smaller image for faster processing. Good for testing.
+#gauss_img = gauss_img[:60, :60]
+
+b = fullWeight(gauss_img, 0.1, 1 /12) # v_pho and v_lab parameters
+
+sh = gauss_img.shape
+segmented = np.zeros(sh)
+
+for i in range(0, len(b[0])):
+    segmented[i // sh[1]][i % sh[1]] = b[0][i]
+
+processedimg = cv2.convertScaleAbs(segmented)
+plt.imsave('..\\images\\segmented.png',segmented, cmap=plt.cm.gray)
+
+ret2, th2 = cv2.threshold(processedimg,0,255,cv2.THRESH_OTSU)
+cv2.imwrite("..\\images\\threshold.jpg", th2)
+
+cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+cv2.imshow('image', gauss_img)
+cv2.namedWindow('segmented', cv2.WINDOW_NORMAL)
+cv2.imshow('segmented', segmented)
+cv2.namedWindow('th2', cv2.WINDOW_NORMAL)
+cv2.imshow('th2', th2)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
