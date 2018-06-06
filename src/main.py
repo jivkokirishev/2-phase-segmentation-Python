@@ -6,6 +6,7 @@ import skimage
 import math
 
 from src.Pixel import Pixel
+from src.Weight import Weight
 
 try:
     from skimage import filters
@@ -60,7 +61,40 @@ def avg(mat, y, x):
 
 
 def cr_labels(img):
-    return 0
+    sh = img.shape
+
+    labels_obj = []
+    labels_nonobj = []
+
+    for y in range(0, sh[0]):
+        for x in range(0, sh[1]):
+            pix_val = img[y, x]
+
+            l2 = neighbours_L2(img, y, x)
+            inf = neighbours_L2(img, y, x)
+            sum_l2 = 0.0
+            for item in l2:
+                sum_l2 += (pix_val - item[0].GetVal()) ** 2
+
+            sum_inf = 0.0
+            for item in inf:
+                sum_inf += (pix_val - item[0].GetVal()) ** 2
+
+            labels_obj.append(Pixel(y, x, pix_val - 1 / 2 * sum_l2 - 1 / 4 * sum_inf, y * sh[1] + x))
+            labels_nonobj.append(Pixel(y, x, 1 - pix_val - 1 / 2 * sum_l2 - 1 / 4 * sum_inf, y * sh[1] + x))
+
+    labels_obj.sort(key=lambda obj: obj.GetVal())
+    labels_obj = labels_obj[-3:]
+    labels_nonobj.sort(key=lambda obj: obj.GetVal())
+    labels_nonobj = labels_nonobj[-3:]
+
+    for item in labels_obj:
+        img[item.GetY(), item.GetX()] = 1
+
+    for item in labels_nonobj:
+        img[item.GetY(), item.GetX()] = 1
+
+    return [labels_obj, labels_nonobj]
 
 
 def wGeo(img):
@@ -78,7 +112,29 @@ def wGeo(img):
 
 
 def wPho(img):
-    return 0
+    sh = img.shape
+    n = sh[0] * sh[1]
+    wMat = sp.lil_matrix((n, n), dtype=np.float32)
+
+    for y in range(0, sh[0]):
+        for x in range(0, sh[1]):
+            pixels = neighbours_inf(img, y, x, 2)
+            weights = []
+            for pix in pixels:
+                w = Weight(Pixel(y, x, img[y, x], y * sh[1] + x), pix[0], math.exp(
+                    -(avg(img, y, x) - avg(img, pix[0].GetY(), pix[0].GetX())) ** 2 - np.linalg.norm(
+                        np.array([pix[0].GetY(), pix[0].GetX()]) - np.array([y, x])) ** 2))
+                weights.append(w)
+
+            weights.sort(key=lambda obj: obj.GetWeight())
+            sum = 0.0
+            for item in weights[-4:]:
+                sum += item.GetWeight()
+
+            for item in weights[-4:]:
+                wMat[item.GetFPixel().GetIndex(), item.GetSPixel().GetIndex()] = item.GetWeight() / sum
+
+    return wMat
 
 
 def wLab(img, labels):
