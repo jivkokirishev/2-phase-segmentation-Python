@@ -157,4 +157,4 @@ fabric.properties
 .idea/httpRequests
 
 #Processed images
-images
+images/*
