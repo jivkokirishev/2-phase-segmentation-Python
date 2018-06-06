@@ -1,6 +1,7 @@
 import cv2
 import scipy.sparse as sp
 import numpy as np
+import scipy.sparse.linalg as lng
 from matplotlib import pyplot as plt
 import skimage
 import math
@@ -166,11 +167,32 @@ def wLab(img, labels):
 
 
 def diagonal(wMat):
-    return 0
+    wMat = -1 * wMat
 
+    sh = wMat.shape
+
+    for r in range(0, sh[0]):
+        val = abs(np.sum(wMat[r], dtype=np.float32))
+        wMat[r, r] = val
+
+    return wMat
 
 def wLLAndwLU(wMat, img, labels):
-    return 0
+    sh = img.shape
+
+    for y in range(0, sh[0]):
+        for x in range(0, sh[1]):
+            wX = y * sh[1] + x
+
+            for item in labels:
+                wY = item.GetIndex()
+
+                if wX != wY:
+                    wMat[wY, wX] = 0.0
+                else:
+                    wMat[wY, wX] = 1.0
+
+    return wMat
 
 
 def wUL(wMat, img, labels):
@@ -178,11 +200,53 @@ def wUL(wMat, img, labels):
 
 
 def computeQ(wMat, img, labels):
-    return 0
+    sh = img.shape
+    q = []
+
+    for y in range(0, sh[0] * sh[1]):
+        sum = 0.0
+
+        for item in labels:
+            x = item.GetIndex()
+
+            sum += wMat[y, x] * img[item.GetY(), item.GetX()]
+
+        q.append(sum)
+
+    return q
 
 
 def fullWeight(img, phoParam, labParam):
-    return 0
+    sh = img.shape
+
+    geoWeight = wGeo(img)
+    phoWeight = wPho(img)
+    labels = cr_labels(img)
+    labels = labels[0] + labels[1]
+    labWeight = wLab(img, labels)
+
+
+    for y in range(0, sh[0]):
+        for x in range(0, sh[1]):
+            if(x != y):
+                pix1 = phoWeight[x, y]
+                pix2 = phoWeight[y, x]
+
+                if(pix1 > pix2):
+                    phoWeight[x, y] = pix2
+                elif(pix2 > pix1):
+                    phoWeight[y, x] = pix1
+
+    wPrim = (1.0 / (1 + phoParam)) * geoWeight + (phoParam / (1 + phoParam)) * phoWeight
+    wMat = (1.0 / (1 + labParam)) * wPrim + (labParam / (1 + labParam)) * labWeight
+
+    wMat = wLLAndwLU(wMat, img, labels)
+    q = computeQ(wMat, img, labels)
+    wMat = diagonal(wMat)
+
+    b = lng.cg(wMat, q)
+
+    return b
 
 
 img = cv2.imread("C:\\Users\\Jivko\\Desktop\\Programi\\OpenCVTest\\x64\\Debug\\bacteries.png", cv2.IMREAD_GRAYSCALE)
