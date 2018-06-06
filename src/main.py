@@ -71,7 +71,7 @@ def cr_labels(img):
             pix_val = img[y, x]
 
             l2 = neighbours_L2(img, y, x)
-            inf = neighbours_L2(img, y, x)
+            inf = neighbours_inf(img, y, x)
             sum_l2 = 0.0
             for item in l2:
                 sum_l2 += (pix_val - item[0].GetVal()) ** 2
@@ -92,7 +92,7 @@ def cr_labels(img):
         img[item.GetY(), item.GetX()] = 1
 
     for item in labels_nonobj:
-        img[item.GetY(), item.GetX()] = 1
+        img[item.GetY(), item.GetX()] = 0
 
     return [labels_obj, labels_nonobj]
 
@@ -138,7 +138,31 @@ def wPho(img):
 
 
 def wLab(img, labels):
-    return 0
+    sh = img.shape
+    n = sh[0] * sh[1]
+    wMat = sp.lil_matrix((n, n), dtype=np.float32)
+
+    labels_avg = []
+    for item in labels:
+        labels_avg.append(
+            Pixel(item.GetY(), item.GetX(), avg(img, item.GetY(), item.GetX()), item.GetY() * sh[1] + item.GetX()))
+
+    for y in range(0, sh[0]):
+        for x in range(0, sh[1]):
+            avg_val = avg(img, y, x)
+            weight_y = y * sh[1] + x
+
+            weights = []
+            sum = 0.0
+            for item in labels_avg:
+                e = math.exp(-(item.GetVal() - avg_val) ** 2)
+                sum += e
+                weights.append(Weight(Pixel(y, x, img[y, x]), item, e))
+
+            for item in weights:
+                wMat[weight_y, item.GetSPixel().GetIndex()] = item.GetWeight() / sum
+
+    return wMat
 
 
 def diagonal(wMat):
